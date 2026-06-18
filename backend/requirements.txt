@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+networkx
+qdrant-client
+numpy
+scikit-learn
+langchain-core
+langgraph
+requests
+beautifulsoup4
+python-dotenv
+httpx
+nest-asyncio
+

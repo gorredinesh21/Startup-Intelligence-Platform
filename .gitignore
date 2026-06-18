@@ -1,0 +1,39 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+.venv/
+venv/
+env/
+ENV/
+
+# Build outputs
+.next/
+out/
+build/
+dist/
+
+# Local database files
+*.db
+*.sqlite
+qdrant_storage/
+local_graph.json
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.development
+.env.test
+
+# IDE configs
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS metadata
+.DS_Store
+Thumbs.db
