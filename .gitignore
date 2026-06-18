@@ -11,6 +11,8 @@ ENV/
 out/
 build/
 dist/
+__pycache__/
+*.pyc
 
 # Local database files
 *.db
@@ -37,3 +39,4 @@ local_graph.json
 # OS metadata
 .DS_Store
 Thumbs.db
+github_token.txt
