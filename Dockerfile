@@ -27,13 +27,7 @@ ENV USE_VERTEX=true
 ENV GCP_PROJECT=personal-project-dg21
 ENV GCP_REGION=us-central1
 
-RUN cat > /start.sh <<'SHELL'
-#!/bin/sh
-# FastAPI backend on port 8000 (internal)
-cd /app && python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
-# Next.js frontend on port 8080 (Cloud Run ingress)
-cd /app/web && exec node server.js
-SHELL
+COPY start.sh /start.sh
 RUN chmod +x /start.sh
 EXPOSE 8080
 ENTRYPOINT ["/start.sh"]
