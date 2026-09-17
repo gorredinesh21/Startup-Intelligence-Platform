@@ -15,7 +15,7 @@ COPY backend/ ./backend/
 # Copy Next.js standalone build
 COPY --from=frontend /web/.next/standalone ./web/
 COPY --from=frontend /web/.next/static ./web/.next/static
-COPY --from=frontend /web/public ./web/public/ 2>/dev/null || true
+# public dir included in standalone build
 
 # Seed database at build time
 ENV LOCAL_FALLBACK=true
