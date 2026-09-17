@@ -241,3 +241,16 @@ def predict_acquisitions(db: Session = Depends(get_db)):
         
     predictions = sorted(predictions, key=lambda x: x["probability"], reverse=True)
     return predictions
+
+
+# --- Static frontend serving (Next.js export) ---
+import os as _os
+from fastapi.staticfiles import StaticFiles as _StaticFiles
+from fastapi.responses import FileResponse as _FileResponse
+
+_static = _os.path.normpath(_os.path.join(_os.path.dirname(_file_), "..", "static")) if False else _os.path.normpath(_os.path.join(_os.path.dirname(__file__), "..", "static"))
+if _os.path.isdir(_static):
+    @app.get("/", include_in_schema=False)
+    async def _spa_root():
+        return _FileResponse(_os.path.join(_static, "index.html"))
+    app.mount("/", _StaticFiles(directory=_static, html=True), name="spa")
