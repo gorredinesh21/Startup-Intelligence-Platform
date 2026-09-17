@@ -19,11 +19,7 @@ COPY --from=frontend /web/.next/static ./web/.next/static
 
 # Seed database at build time
 ENV LOCAL_FALLBACK=true
-RUN python -c "
-import sys; sys.path.insert(0, '.')
-from backend.seed import seed_database
-seed_database()
-" || echo "seed done (warnings ok)"
+RUN python -c 'import sys; sys.path.insert(0, "."); from backend.seed import seed_database; seed_database()' || echo "seed done"
 
 # Runtime
 ENV PORT=8080
