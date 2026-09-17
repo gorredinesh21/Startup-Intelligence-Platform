@@ -11,6 +11,67 @@ HF_API_KEY = os.getenv("HF_API_KEY", "hf_mock_placeholder_token")
 LOCAL_FALLBACK = os.getenv("LOCAL_FALLBACK", "true").lower() == "true"
 IS_MOCK = "mock" in HF_API_KEY or HF_API_KEY == "hf_your_key_here" or not HF_API_KEY or LOCAL_FALLBACK
 
+# Vertex AI (GCP) — when USE_VERTEX=true, generation goes through Vertex AI
+# instead of HuggingFace. Auth: metadata server (Cloud Run) or gcloud (local).
+USE_VERTEX = os.getenv("USE_VERTEX", "false").lower() == "true"
+GCP_PROJECT = os.environ.get("GCP_PROJECT", "")
+GCP_REGION = os.environ.get("GCP_REGION", "us-central1")
+VERTEX_MODEL = os.environ.get("VERTEX_MODEL", "gemini-2.5-flash")
+_vertex_token_cache = {"token": None, "exp": 0}
+
+def _vertex_token() -> str:
+    import time as _time, subprocess
+    now = _time.time()
+    if _vertex_token_cache["token"] and now < _vertex_token_cache["exp"]:
+        return _vertex_token_cache["token"]
+    try:
+        r = requests.get(
+            "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+            headers={"Metadata-Flavor": "Google"}, timeout=3)
+        if r.status_code == 200:
+            _vertex_token_cache["token"] = r.json()["access_token"]
+            _vertex_token_cache["exp"] = now + 45 * 60
+            return _vertex_token_cache["token"]
+    except requests.RequestException:
+        pass
+    out = subprocess.run(["gcloud", "auth", "print-access-token"],
+                         capture_output=True, text=True, timeout=30)
+    if out.returncode == 0:
+        _vertex_token_cache["token"] = out.stdout.strip()
+        _vertex_token_cache["exp"] = now + 45 * 60
+        return _vertex_token_cache["token"]
+    raise RuntimeError("Could not get Vertex AI token (no metadata server, gcloud failed)")
+
+def _vertex_generate(messages: list, temperature: float, max_tokens: int) -> str:
+    """Call Vertex AI Gemini generateContent."""
+    import time as _time
+    system_parts = [m["content"] for m in messages if m.get("role") == "system"]
+    contents = [{"role": "model" if m.get("role") == "assistant" else "user",
+                 "parts": [{"text": m["content"]}]}
+                for m in messages if m.get("role") != "system"]
+    url = (f"https://{GCP_REGION}-aiplatform.googleapis.com/v1/projects/"
+           f"{GCP_PROJECT}/locations/{GCP_REGION}/publishers/google/"
+           f"models/{VERTEX_MODEL}:generateContent")
+    payload = {"contents": contents,
+               "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens}}
+    if system_parts:
+        payload["system_instruction"] = {"parts": [{"text": "\n".join(system_parts)}]}
+    for attempt in range(4):
+        token = _vertex_token()
+        res = requests.post(url, json=payload,
+                           headers={"Authorization": f"Bearer {token}"}, timeout=60)
+        if res.status_code == 429:
+            wait = int(res.headers.get("Retry-After", 20)) + attempt * 5
+            print(f"[vertex] 429; backing off {wait}s")
+            _time.sleep(wait)
+            continue
+        break
+    if res.status_code == 200:
+        candidates = res.json().get("candidates", [])
+        if candidates:
+            return candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+    raise RuntimeError(f"Vertex AI error {res.status_code}: {res.text[:200]}")
+
 EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"
 GENERATION_MODEL = "mistralai/Mistral-Small-3.1-24B-Instruct"
 RERANKER_MODEL = "BAAI/bge-reranker-large"
@@ -61,7 +122,14 @@ def get_embedding(text: str) -> list[float]:
     return [random.uniform(-0.1, 0.1) for _ in range(1024)]
 
 def generate_text(messages: list[dict], temperature: float = 0.3, max_tokens: int = 800) -> str:
-    """Queries Mistral Small 3.1 or returns dynamic mock responses."""
+    """Queries Vertex AI Gemini (preferred), HF, or returns mock responses."""
+    # Vertex AI path — real AI, no API key needed on GCP
+    if USE_VERTEX and GCP_PROJECT:
+        try:
+            return _vertex_generate(messages, temperature, max_tokens)
+        except Exception as e:
+            print(f"[vertex] generation failed, falling back: {e}")
+
     user_query = ""
     for msg in reversed(messages):
         if msg.get("role") == "user":

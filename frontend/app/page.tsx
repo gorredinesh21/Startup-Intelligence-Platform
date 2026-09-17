@@ -37,7 +37,7 @@ const GraphCanvas = dynamic(() => import("@/components/GraphCanvas"), {
   )
 });
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 // Simple custom markdown parser for bullet lists, bold text, headers, and clean tables
 const formatMarkdown = (text: string) => {
