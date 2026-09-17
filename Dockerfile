@@ -6,10 +6,11 @@ RUN npm ci --no-fund --no-audit
 COPY frontend/ ./
 RUN npm run build
 
-FROM python:3.12-slim
+FROM node:20-slim
+RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt --break-system-packages
 COPY backend/ ./backend/
 
 # Copy Next.js standalone build
@@ -19,7 +20,7 @@ COPY --from=frontend /web/.next/static ./web/.next/static
 
 # Seed database at build time
 ENV LOCAL_FALLBACK=true
-RUN python -c 'import sys; sys.path.insert(0, "."); from backend.seed import seed_database; seed_database()' || echo "seed done"
+RUN python3 -c 'import sys; sys.path.insert(0, "."); from backend.seed import seed_database; seed_database()' || echo "seed done"
 
 # Runtime
 ENV PORT=8080
