@@ -4,12 +4,9 @@ steps:
       [
         "build",
         "-t",
-        "us-central1-docker.pkg.dev/$PROJECT_ID/startup-intel/app:$SHORT_SHA",
-        "-t",
         "us-central1-docker.pkg.dev/$PROJECT_ID/startup-intel/app:latest",
         ".",
       ]
 images:
-  - "us-central1-docker.pkg.dev/$PROJECT_ID/startup-intel/app:$SHORT_SHA"
   - "us-central1-docker.pkg.dev/$PROJECT_ID/startup-intel/app:latest"
 timeout: 1800s

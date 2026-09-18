@@ -98,28 +98,37 @@ def make_hf_request(model_id, payload):
             break
     return None
 
+_LOCAL_EMBEDDER = {"model": None}
+
+def _get_local_embedder():
+    """Lazy-load fastembed ONNX bge-small-en-v1.5 (384d, CPU, no API key)."""
+    if _LOCAL_EMBEDDER["model"] is None:
+        try:
+            from fastembed import TextEmbedding
+            _LOCAL_EMBEDDER["model"] = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+        except Exception as e:
+            print(f"fastembed unavailable ({e}); falling back to hash vectors")
+            _LOCAL_EMBEDDER["model"] = False
+    return _LOCAL_EMBEDDER["model"]
+
 def get_embedding(text: str) -> list[float]:
-    """Generates 1024-dimensional embedding vector."""
-    if IS_MOCK:
-        # Generate stable mock embedding based on hash of text
-        random.seed(hash(text))
-        vec = [random.uniform(-0.1, 0.1) for _ in range(1024)]
-        # Normalize
-        norm = sum(x**2 for x in vec)**0.5
-        return [x/norm for x in vec]
-        
-    payload = {"inputs": text, "options": {"wait_for_model": True}}
-    res = make_hf_request(EMBEDDING_MODEL, payload)
-    
-    if res and isinstance(res, list):
-        # bge-large-en-v1.5 output can be list of floats or list of lists
-        if isinstance(res[0], list):
-            return res[0]
-        return res
-    
-    # Fallback to random if API fails
+    """Generates a 384-dimensional embedding vector (fastembed bge-small-en-v1.5).
+
+    Local ONNX model — semantic, deterministic, no API key. Hash vectors are a
+    last-resort fallback only if fastembed itself is unavailable.
+    """
+    model = _get_local_embedder()
+    if model:
+        try:
+            return list(next(model.embed([text])))
+        except Exception as e:
+            print(f"fastembed error ({e}); hash fallback")
+
     random.seed(hash(text))
-    return [random.uniform(-0.1, 0.1) for _ in range(1024)]
+    vec = [random.uniform(-0.1, 0.1) for _ in range(384)]
+    norm = sum(x**2 for x in vec)**0.5
+    return [x/norm for x in vec]
+
 
 def generate_text(messages: list[dict], temperature: float = 0.3, max_tokens: int = 800) -> str:
     """Queries Vertex AI Gemini (preferred), HF, or returns mock responses."""

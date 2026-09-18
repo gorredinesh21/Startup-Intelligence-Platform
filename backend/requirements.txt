@@ -14,3 +14,4 @@ python-dotenv
 httpx
 nest-asyncio
 
+fastembed

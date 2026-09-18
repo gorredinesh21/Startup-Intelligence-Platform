@@ -10,7 +10,7 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 
 COLLECTION_NAME = "raptor_chunks"
-VECTOR_DIMENSION = 1024  # Dimension of BAAI/bge-large-en-v1.5
+VECTOR_DIMENSION = 384  # Dimension of BAAI/bge-small-en-v1.5 (fastembed ONNX, local)
 
 _client = None
 
