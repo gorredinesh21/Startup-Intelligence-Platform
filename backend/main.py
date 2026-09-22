@@ -115,50 +115,96 @@ def get_stats(db: Session = Depends(get_db)):
 def seed():
     try:
         stats = seed_database()
+        _SIM_EMBEDDINGS.clear()  # rows were replaced; drop stale vectors
         return {"status": "success", "data": stats}
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+# --- Similarity helpers -----------------------------------------------------
+# Similarity is computed over REAL profile fields (name + market + description +
+# tech stack). The raptor_summary column is NOT usable for this: on builds where
+# LLM generation fell back to mock responses it contains only a handful of
+# identical canned texts, which made every startup score ~100% similar.
+import json as _json
+import numpy as np
+
+_SIM_EMBEDDINGS: dict = {}  # name -> embedding list (per-process cache)
+
+def _similarity_text(s: Startup) -> str:
+    parts = []
+    if s.name:
+        parts.append(s.name.strip())
+    if s.market:
+        parts.append(f"Market: {s.market.strip()}")
+    if s.description:
+        parts.append(s.description.strip())
+    if s.tech_stack:
+        parts.append(f"Tech stack: {s.tech_stack.strip()}")
+    return ". ".join(parts)
+
+def _startup_embedding(db: Session, s: Startup) -> Optional[list]:
+    """Embedding from cache -> DB column -> compute (and persist)."""
+    text = _similarity_text(s)
+    if not text:
+        return None
+    emb = _SIM_EMBEDDINGS.get(s.name)
+    if emb is not None:
+        return emb
+    if s.embedding:
+        try:
+            emb = _json.loads(s.embedding)
+        except (ValueError, TypeError):
+            emb = None
+    if emb is None:
+        emb = get_embedding(text)
+        # fastembed returns numpy float32 values — json can't serialize them,
+        # which silently killed DB persistence of the embeddings.
+        emb = [float(v) for v in emb]
+        try:
+            s.embedding = _json.dumps(emb)
+            db.commit()
+        except Exception:
+            db.rollback()  # persistence is an optimization, never a blocker
+    if emb:
+        _SIM_EMBEDDINGS[s.name] = emb
+    return emb
+
 @app.get("/api/similar")
 def get_similar_startups(name: str, db: Session = Depends(get_db)):
-    """Finds top similar startups based on Level 3 description embedding similarity."""
+    """Finds top similar startups by BGE embedding similarity over profile fields."""
     target = db.query(Startup).filter(Startup.name.ilike(name)).first()
     if not target:
         raise HTTPException(status_code=404, detail="Startup not found")
-        
-    # Get all startups
+
+    target_emb = _startup_embedding(db, target)
+    if not target_emb:
+        return []
+
+    target_vec = np.asarray(target_emb, dtype=np.float32)
+    target_norm = np.linalg.norm(target_vec)
+    if target_norm == 0:
+        return []
+
     all_startups = db.query(Startup).filter(Startup.name != target.name).all()
-    if not all_startups:
-        return []
-        
-    # Embed the target description
-    target_text = target.raptor_summary or target.description or ""
-    if not target_text:
-        return []
-        
-    target_emb = get_embedding(target_text)
-    
-    # Calculate similarity scores
-    import numpy as np
     similarities = []
-    
     for startup in all_startups:
-        desc = startup.raptor_summary or startup.description or ""
-        if not desc:
+        emb = _startup_embedding(db, startup)
+        if not emb:
             continue
-        emb = get_embedding(desc)
-        
-        # Cosine similarity
-        score = np.dot(target_emb, emb) / (np.linalg.norm(target_emb) * np.linalg.norm(emb))
+        vec = np.asarray(emb, dtype=np.float32)
+        norm = np.linalg.norm(vec)
+        if norm == 0:
+            continue
+        score = float(np.dot(target_vec, vec) / (target_norm * norm))
         similarities.append({
             "name": startup.name,
             "market": startup.market,
-            "score": float(score),
+            "score": score,
             "description": startup.description
         })
-        
+
     similarities = sorted(similarities, key=lambda x: x["score"], reverse=True)
     return similarities[:5]
 

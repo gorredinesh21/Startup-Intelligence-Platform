@@ -862,7 +862,7 @@ export default function Dashboard() {
                   {isFetchSimilarLoading ? (
                     <div className="flex items-center justify-center py-10 gap-2">
                       <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
-                      <span className="text-xs text-gray-400">Running BGE-Large embedding distance comparison...</span>
+                      <span className="text-xs text-gray-400">Computing BGE embedding similarity across the corpus...</span>
                     </div>
                   ) : similarStartups.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

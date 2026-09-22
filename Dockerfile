@@ -13,6 +13,9 @@ COPY backend/ ./backend/
 COPY --from=frontend /web/out ./static
 
 ENV LOCAL_FALLBACK=true
+# Warm the fastembed model into the image layer (avoids a ~30MB download on the
+# first /api/similar request at runtime).
+RUN python3 -c 'import sys; sys.path.insert(0, "."); from backend.embeddings.hf_client import get_embedding; get_embedding("warmup")'
 RUN python3 -c 'import sys; sys.path.insert(0, "."); from backend.seed import seed_database; seed_database()' || echo "seed done"
 
 ENV PORT=8080

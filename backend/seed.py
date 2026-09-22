@@ -210,6 +210,19 @@ def seed_database():
             logo_url=profile["logo_url"],
             raptor_summary=raptor_summary
         )
+        # Precompute the similarity embedding at seed time so /api/similar is
+        # instant at runtime (per-request embedding of the whole corpus took ~20s).
+        try:
+            from backend.embeddings.hf_client import get_embedding as _ge
+            _sim_text = ". ".join(p for p in [
+                name,
+                f"Market: {profile['market']}" if profile.get("market") else "",
+                profile.get("description") or "",
+                f"Tech stack: {profile['tech_stack']}" if profile.get("tech_stack") else "",
+            ] if p)
+            startup.embedding = _json.dumps([float(v) for v in _ge(_sim_text)])
+        except Exception as _e:
+            print(f"embedding precompute skipped for {name}: {_e}")
         db.add(startup)
         db.commit()
         

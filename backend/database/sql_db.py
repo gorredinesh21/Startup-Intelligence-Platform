@@ -35,6 +35,7 @@ class Startup(Base):
     funding_total = Column(Float, default=0.0)
     logo_url = Column(String, nullable=True)
     raptor_summary = Column(Text, nullable=True)  # Global level 3 summary
+    embedding = Column(Text, nullable=True)  # JSON list — BGE embedding of name+market+description+tech
 
 class FundingRound(Base):
     __tablename__ = "funding_rounds"
@@ -59,6 +60,16 @@ class NewsArticle(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    # create_all does not add columns to existing tables — migrate old DBs so the
+    # similarity endpoint can persist embeddings.
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE startups ADD COLUMN embedding TEXT"))
+            conn.commit()
+        except OperationalError:
+            pass  # column already exists
 
 def get_db():
     db = SessionLocal()

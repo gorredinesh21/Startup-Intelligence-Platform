@@ -40,3 +40,4 @@ local_graph.json
 .DS_Store
 Thumbs.db
 github_token.txt
+static/

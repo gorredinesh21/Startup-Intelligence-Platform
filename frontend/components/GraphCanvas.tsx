@@ -136,7 +136,10 @@ export default function GraphCanvas({ data, onNodeSelect, onExpandNode }: any) {
         return {
           id: node.id,
           type: "custom",
-          data: { label: node.id, labelType: node.label, ...node },
+          // Spread first: node.label is the entity TYPE ("Company"), node.id is the
+          // display name — explicit keys must come after the spread or every node
+          // renders its type instead of its name.
+          data: { ...node, label: node.id, labelType: node.label },
           position: { x: 500, y: 350 }
         };
       }
@@ -152,7 +155,7 @@ export default function GraphCanvas({ data, onNodeSelect, onExpandNode }: any) {
       return {
         id: node.id,
         type: "custom",
-        data: { label: node.id, labelType: node.label, ...node },
+        data: { ...node, label: node.id, labelType: node.label },
         position: {
           x: 500 + Math.cos(staggeredAngle) * radius,
           y: 350 + Math.sin(staggeredAngle) * radius
